@@ -232,8 +232,8 @@ finish-device
 new-device
   " usb" device-name
   " usb" device-type
-  " NTDOY,ohci" model
-  " NTDOY,ohci" encode-string " compatible" property
+  " NTDOY,ohciBT" model
+  " NTDOY,ohciBT" encode-string " compatible" property
   " " encode-string " built-in" property
   h# 0d060000 encode-int 100 encode-int encode+ " reg" property
   d# 6 encode-int " interrupts" property

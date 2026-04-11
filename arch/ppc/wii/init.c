@@ -33,6 +33,7 @@
 #include "libopenbios/video.h"
 #include "openbios-version.h"
 #include "libc/byteorder.h"
+#include "libc/diskio.h"
 #include "libc/vsprintf.h"
 #define NO_QEMU_PROTOS
 #include "arch/common/fw_cfg.h"
@@ -115,6 +116,14 @@ static void cafe_poweroff(void) {
     out_be32((volatile unsigned int*)CAFE_LATTE_IPCPPCCTRL, 0x1);
 
     while (in_be32((volatile unsigned int*)CAFE_LATTE_IPCPPCCTRL) & 0x1);
+}
+
+static void
+setenv(const char *env, const char *value)
+{
+	push_str( value );
+	push_str( env );
+	fword("$setenv");
 }
 
 void entry(void) {
@@ -481,6 +490,9 @@ arch_of_init(void)
     char *boot_device;
     ofmem_t *ofmem = ofmem_arch_get_private();
     ucell load_base;
+    char autobootPath[32];
+    int autoboot;
+    int fd;
 
     openbios_init();
     modules_init();
@@ -563,7 +575,7 @@ arch_of_init(void)
     boot_device = pop_fstr_copy();
 
     if (boot_device && strcmp(boot_device, "disk") == 0) {
-        boot_path = "cd";
+        boot_path = "hd";
 
         snprintf(buf, sizeof(buf),
                     "%s:,\\\\:tbxi "
@@ -670,6 +682,28 @@ arch_of_init(void)
     ob_wii_shdc_init(get_path_from_ph(dnode), get_int_property(dnode, "reg", NULL));
 
     device_end();
+
+    //
+    // Check for disable-autoboot file. File presence will disable normal boot process
+    //
+    autoboot = 1;
+    for (uint32_t i = 2; i < 6; i++) {
+        snprintf(autobootPath, sizeof(autobootPath), "hd:%u,\\disable-autoboot", i);
+        fd = open_io(autobootPath);
+        if (fd != -1) {
+            if (strcmp(get_fstype(fd), "FAT") != 0) {
+                close_io(fd);
+                continue;
+            }
+
+            printk("found disable-autoboot at %s\n", autobootPath);
+            close_io(fd);
+            autoboot = 0;
+            break;
+        }
+    }
+
+    setenv("auto-boot?", autoboot ? "true" : "false" );
 
     //
     // Bind poweroff and reset words.

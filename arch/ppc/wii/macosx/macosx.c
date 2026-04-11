@@ -135,7 +135,7 @@ int macosx_patch(void) {
     }
 
     ret = obp_devseek(ph, 0, 0);
-    if (ret !=  0) {
+    if (ret != 0) {
         printk("failed to seek mkext\n");
         return 0;
     }

@@ -142,11 +142,19 @@ arch_init_program(void)
 
     //
     // Patch BootX if present.
-    // Entry is always within the first page.
+    // Entry is always within the first few pages.
     //
     gIsBootX = 0;
     macho = (char*)(entry & ~(0xFFF));
-    machoTop = macho_get_top(macho);
+    for (int i = 0; i < 4; i++) {
+        machoTop = macho_get_top(macho);
+        if (machoTop) {
+            break;
+        }
+
+        macho -= PAGE_SIZE;
+    }
+
     if (machoTop) {
         macosx_patch_bootx(macho, machoTop - (unsigned long)macho);
         gIsBootX = 1;

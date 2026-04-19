@@ -21,7 +21,7 @@ unsigned long macho_get_top(void *macho) {
     struct mach_header      *machHeader;
     char                    *commandPtr;
     struct load_command     *loadCommand;
-    struct segment_command  *segCommand; 
+    struct segment_command  *segCommand;
     unsigned long           machTop;
 
     //
@@ -29,7 +29,7 @@ unsigned long macho_get_top(void *macho) {
     //
     machHeader = (struct mach_header*)macho;
     if (machHeader->magic != MH_MAGIC) {
-        printk("macho_get_top: Not a macho at %p\n", macho);
+        printk("macho_get_top: Not a macho at %p, wrong magic 0x%lx\n", macho, machHeader->magic);
         return 0;
     }
 
@@ -48,7 +48,7 @@ unsigned long macho_get_top(void *macho) {
             }
         }
 
-        commandPtr += loadCommand->cmdsize; 
+        commandPtr += loadCommand->cmdsize;
     }
 
     return machTop;

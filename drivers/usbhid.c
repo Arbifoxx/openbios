@@ -39,24 +39,11 @@
 #include "drivers/usb.h"
 #include "usb.h"
 
-DECLARE_UNNAMED_NODE(usb_kbd, 0, sizeof(int));
-
-static void
-keyboard_open(int *idx)
-{
-	RET(-1);
-}
-
-static void
-keyboard_close(int *idx)
-{
-}
+DECLARE_UNNAMED_NODE(usb_kbd, INSTALL_OPEN, sizeof(int));
 
 static void keyboard_read(void);
 
 NODE_METHODS( usb_kbd ) = {
-	{ "open",		keyboard_open		},
-	{ "close",		keyboard_close		},
 	{ "read",               keyboard_read		},
 };
 
@@ -456,11 +443,16 @@ static int usb_hid_set_layout (const char *country)
 static void usb_hid_add_keyboard(usbdev_t *dev) {
 	char name[128];
 	phandle_t aliases;
+	phandle_t chosen;
 	phandle_t dnode;
+	ihandle_t ih;
 
-    fword("new-device");
-    dnode = get_cur_dev();
-    set_int_property(dnode, "reg", dev->address);
+	printk("USB HID: publishing keyboard for controller %p device address %d\n",
+	       dev->controller, dev->address);
+
+	fword("new-device");
+	dnode = get_cur_dev();
+	set_int_property(dnode, "reg", dev->address);
 
 	push_str("keyboard");
 	fword("device-name");
@@ -468,15 +460,23 @@ static void usb_hid_add_keyboard(usbdev_t *dev) {
 	push_str("keyboard");
 	fword("device-type");
 
-	snprintf(name, sizeof(name), "%s/keyboard", get_path_from_ph(dnode));
-	usb_debug("Found keyboard at %s\n", name);
+	snprintf(name, sizeof(name), "%s", get_path_from_ph(dnode));
+	printk("USB HID: keyboard node path %s\n", name);
 
 	BIND_NODE_METHODS(get_cur_dev(), usb_kbd);
 
 	fword("finish-device");
 
+	chosen = find_dev("/chosen");
+	push_str(name);
+	fword("open-dev");
+	ih = POP();
+	printk("USB HID: open-dev(%s) returned %lx\n", name, (unsigned long)ih);
+	set_int_property(chosen, "keyboard", ih);
+
 	aliases = find_dev("/aliases");
 	set_property(aliases, "keyboard", name, strlen(name) + 1);
+	printk("USB HID: alias keyboard -> %s\n", name);
 }
 
 void
@@ -487,6 +487,10 @@ usb_hid_init (usbdev_t *dev)
 
 	if (interface->bInterfaceSubClass == hid_subclass_boot) {
 		u8 countrycode = 0;
+		printk("USB HID: boot HID device addr=%d class=%d subclass=%d protocol=%d endpoints=%d\n",
+		       dev->address, interface->bInterfaceClass,
+		       interface->bInterfaceSubClass, interface->bInterfaceProtocol,
+		       dev->num_endp);
 		usb_debug ("  supports boot interface..\n");
 		usb_debug ("  it's a %s\n",
 			boot_protos[interface->bInterfaceProtocol]);
@@ -533,11 +537,23 @@ usb_hid_init (usbdev_t *dev)
 					continue;
 				break;
 			}
+			if (i > dev->num_endp) {
+				printk("USB HID: no interrupt-in endpoint found for keyboard addr=%d\n",
+				       dev->address);
+				break;
+			}
 			usb_debug ("  found endpoint %x for interrupt-in\n", i);
 			/* 20 buffers of 8 bytes, for every 10 msecs */
 			HID_INST(dev)->queue = dev->controller->create_intr_queue (&dev->endpoints[i], 8, 20, 10);
+			if (!HID_INST(dev)->queue) {
+				printk("USB HID: failed to create interrupt queue for keyboard addr=%d endpoint=%d\n",
+				       dev->address, i);
+				break;
+			}
 			keycount = 0;
 			usb_debug ("  configuration done.\n");
+			printk("USB HID: keyboard addr=%d configured, registering firmware node\n",
+			       dev->address);
 			usb_hid_add_keyboard(dev);
 			break;
 		default:
@@ -599,7 +615,7 @@ void ob_usb_hid_add_keyboard(const char *path)
 	push_str("keyboard");
 	fword("device-type");
 
-	snprintf(name, sizeof(name), "%s/keyboard", path);
+	snprintf(name, sizeof(name), "%s", path);
 	usb_debug("Found keyboard at %s\n", name);
 
 	BIND_NODE_METHODS(get_cur_dev(), usb_kbd);

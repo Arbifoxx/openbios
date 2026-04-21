@@ -684,6 +684,43 @@ arch_of_init(void)
         ob_usb_ohci_init(get_path_from_ph(dnode), get_int_property(dnode, "reg", NULL));
     }
 
+    {
+        phandle_t aliases = find_dev("/aliases");
+        phandle_t options = find_dev("/options");
+        int proplen;
+        char *prop;
+        ihandle_t ih;
+
+        prop = get_property(aliases, "keyboard", &proplen);
+        if (prop && proplen > 0) {
+            printk("Wii USB debug: /aliases keyboard -> %.*s\n",
+                   proplen - 1, prop);
+        } else {
+            printk("Wii USB debug: /aliases keyboard missing\n");
+        }
+
+        prop = get_property(options, "input-device", &proplen);
+        if (prop && proplen > 0) {
+            printk("Wii USB debug: /options input-device = %.*s\n",
+                   proplen - 1, prop);
+        }
+
+        ih = open_dev("keyboard");
+        printk("Wii USB debug: open_dev(\"keyboard\") -> %lx\n", (unsigned long)ih);
+        if (ih) {
+            close_dev(ih);
+        }
+    }
+
+    /*
+     * USB HID keyboard nodes are created during OHCI enumeration, so retry
+     * the console bindings now that the keyboard alias may exist and open.
+     */
+    fword("output-device");
+    fword("output");
+    fword("input-device");
+    fword("input");
+
     //
     // Initialize SDHC.
     //

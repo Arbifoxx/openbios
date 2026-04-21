@@ -111,8 +111,11 @@ static int xnu_patch_cpu_check(macho_sym_context_t *symContext) {
 //
 // Patch the BAT setup to avoid conflicts with other BATs for the video DBAT3, and prevent DBAT2 from being filled.
 //
-static int xnu_patch_io_bats(macho_sym_context_t *symContext) {
+static int xnu_patch_io_bats(macho_sym_context_t *symContext, uint32_t kernelVersion) {
     unsigned long   kern_sym_ppc_init;
+    const char      *videoBatFind2;
+    const char      *videoBatRepl2;
+    size_t          videoBatSize2;
     char            *base;
     int             found;
 
@@ -124,10 +127,16 @@ static int xnu_patch_io_bats(macho_sym_context_t *symContext) {
         0xFF, 0x00,     // ... 0xFF00
         0x41, 0x82      // beq ...
     };
-    static const char videoBatFind2[] = {
+    static const char videoBatFindCheetahPuma2[] = {
+        0x61, 0x6B, 0x1F, 0xFC      // ori r11, r11, 0x1FFC
+    };
+    static const char videoBatReplCheetahPuma2[] = {
+        0x61, 0x6B, 0x00, 0x3C      // ori r11, r11, 0x3C
+    };
+    static const char videoBatFindJag2[] = {
         0x63, 0xB9, 0x1F, 0xFC      // ori r25, r29, 0x1FFC
     };
-    static const char videoBatRepl2[] = {
+    static const char videoBatReplJag2[] = {
         0x63, 0xB9, 0x00, 0x3C      // ori r25, r29, 0x3C
     };
     static const char ioBatFind1[] = {
@@ -176,13 +185,26 @@ static int xnu_patch_io_bats(macho_sym_context_t *symContext) {
     }
 
     if (is_wii_rvl()) {
+        if (xnu_match_darwin_version(kernelVersion, XNU_VERSION_CHEETAH_MIN, XNU_VERSION_PUMA_MAX)) {
+            videoBatFind2 = videoBatFindCheetahPuma2;
+            videoBatRepl2 = videoBatReplCheetahPuma2;
+            videoBatSize2 = sizeof (videoBatFindCheetahPuma2);
+        } else if (xnu_match_darwin_version(kernelVersion, XNU_VERSION_JAGUAR_MIN, XNU_VERSION_JAGUAR_MAX)) {
+            videoBatFind2 = videoBatFindJag2;
+            videoBatRepl2 = videoBatReplJag2;
+            videoBatSize2 = sizeof (videoBatFindJag2);
+        } else {
+            printk("xnu_patch_io_bats: unknown kernel version for video BAT pattern 2\n");
+            return 0;
+        }
+
         //
         // Do second video BAT patch. Change size to 2MB to ensure regular MEM2 memory is not included in BAT.
         //
         found = 0;
         for (int i = 0; i < 0x1000; i += 4) {
-            if (memcmp(&base[i], videoBatFind2, sizeof (videoBatFind2)) == 0) {
-                memcpy(&base[i], videoBatRepl2, sizeof (videoBatRepl2));
+            if (memcmp(&base[i], videoBatFind2, videoBatSize2) == 0) {
+                memcpy(&base[i], videoBatRepl2, videoBatSize2);
                 printk("xnu_patch_io_bats: patched video BAT pattern 2 at %p\n", &base[i]);
                 found = 1;
                 break;
@@ -349,7 +371,6 @@ int xnu_patch(void) {
     if (xnu_version == 0) {
         return 0;
     }
-    printk("XNU version: 0x%X\n", xnu_version);
 
     if (!xnu_patch_disable_function(&kernel_syms, "_PE_find_scc")) {
         return 0;
@@ -362,7 +383,7 @@ int xnu_patch(void) {
     }
 
     if (xnu_match_darwin_version(xnu_version, 0, XNU_VERSION_JAGUAR_MAX)) {
-        if (!xnu_patch_io_bats(&kernel_syms)) {
+        if (!xnu_patch_io_bats(&kernel_syms, xnu_version)) {
             return 0;
         }
     }
@@ -387,6 +408,6 @@ int xnu_patch(void) {
         xnu_patch_colortable(&kernel_syms);
     }
 #endif
-    
+
     return 1;
 }

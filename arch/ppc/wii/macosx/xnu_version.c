@@ -2,7 +2,7 @@
  *	<xnu_version.c>
  *
  *   Copyright (C) 2025 John Davis
- * 
+ *
  *   Portions taken from OpenCorePkg under the BSD-3 license.
  *   Portions Copyright (C) 2019, vit9696. All rights reserved.
  *
@@ -135,7 +135,7 @@ uint32_t xnu_read_darwin_version(macho_sym_context_t *symContext) {
     darwinVersion[index] = '\0';
 
     darwinVersionInteger = parse_darwin_version(darwinVersion);
-    printk("xnu_read_darwin_version: XNU kernel version: %u\n", darwinVersionInteger);
+    printk("xnu_read_darwin_version: XNU kernel version: %s (%u)\n", darwinVersion, darwinVersionInteger);
 
     return darwinVersionInteger;
 }
